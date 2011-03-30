@@ -1,0 +1,18 @@
+#!/usr/bin/env ruby
+
+require 'tsatsiki/cucumber/formatter'
+
+require 'rubygems'
+
+version = ">= 0"
+
+if ARGV.first =~ /^_(.*)_$/ and Gem::Version.correct? $1 then
+  version = $1
+  ARGV.shift
+end
+
+ARGV.push('-f')
+ARGV.push('Tsatsiki::Cucumber::Formatter')
+
+gem 'cucumber', version
+load Gem.bin_path('cucumber', 'cucumber', version)

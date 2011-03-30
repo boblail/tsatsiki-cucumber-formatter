@@ -1,0 +1,3 @@
+# Tsatsiki::Cucumber::Formatter
+
+Writes results of cucumber tests to a Tsatsiki server
