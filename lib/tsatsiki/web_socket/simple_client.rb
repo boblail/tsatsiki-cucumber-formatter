@@ -1,6 +1,9 @@
 ### c.f. https://github.com/imanel/libwebsocket/blob/v0.1.0/examples/plain_client.rb
 
+# libwebsocket doesn't properly load dependencies: do it here
 require "rubygems"
+require "addressable/uri"
+
 require "socket"
 require "libwebsocket"
 
