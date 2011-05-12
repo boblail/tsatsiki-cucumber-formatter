@@ -11,8 +11,14 @@ if ARGV.first =~ /^_(.*)_$/ and Gem::Version.correct? $1 then
   ARGV.shift
 end
 
+# Run Cucumber with the Tsatsiki formatter
 ARGV.push('-f')
 ARGV.push('Tsatsiki::Cucumber::Formatter')
 
+# Omit features tagged @human
+ARGV.push('--tags')
+ARGV.push('~@human')
+
+# Run Cucumber
 gem 'cucumber', version
 load Gem.bin_path('cucumber', 'cucumber', version)
