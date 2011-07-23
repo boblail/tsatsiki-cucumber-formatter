@@ -3,7 +3,7 @@ $:.push File.expand_path("../lib", __FILE__)
 
 Gem::Specification.new do |s|
   s.name        = "tsatsiki-cucumber-formatter"
-  s.version     = '0.1.1'
+  s.version     = '0.2.0'
   s.platform    = Gem::Platform::RUBY
   s.authors     = ["Bob Lail"]
   s.email       = ["bob.lailfamily@gmail.com"]
