@@ -1,40 +1,60 @@
-require 'cucumber/formatter/gherkin_formatter_adapter'
-require 'gherkin/formatter/argument'
-require 'gherkin/formatter/json_formatter'
 require File.expand_path('../../web_socket/simple_client', __FILE__)
 
 
 module Tsatsiki
   module Cucumber
-    class Formatter < ::Cucumber::Formatter::GherkinFormatterAdapter
+    class Formatter
+      
+      
       
       def initialize(step_mother, io, options)
         @options = options
         @tsatsiki_url = ENV['TSATSIKI_URL']
         @project_id = ENV['TSATSIKI_PROJECT_ID']
         
-        puts "="*80, "connecting to #{@tsatsiki_url}", "="*80
+        puts "="*80, "[tsatsiki-cucumber-formatter] connecting to #{@tsatsiki_url}", "="*80
         @websocket = WebSocket::SimpleClient.new(@tsatsiki_url)
         
         send_message('started', {:project_id => @project_id})
         at_exit do
           send_message('finished', {:project_id => @project_id})
         end
+      end
+      
+      
+      
+      def before_feature(feature)
         
-        super(Gherkin::Formatter::JSONFormatter.new(nil), false)
+        # Tsatsiki identifies Scenarios and ScenarioOutlines by their index
+        # within a feature file rather than by their line number. One reason
+        # for this is that the s-expression for ScenarioOutlines does not
+        # indicate their line number.
+        map_line_numbers_to_indexes(feature)
       end
       
-      
-      
-      def after_feature(feature)
-        super
-        p @gf.gherkin_object
-        send_message('result', {
-          :project_id => @project_id,
-          :feature_file => feature.file,
-          :scenarios => format_scenarios(@gf.gherkin_object)
-        })
+      # `element` is either Background, Scenario, or ScenarioOutline
+      # c.f. http://rdoc.info/github/aslakhellesoy/cucumber/master/Cucumber/Ast/FeatureElement
+      def after_feature_element(element)
+        unless is_background?(element)
+          
+          klass = element.class.name[/[^:]*$/]
+          status = get_status(element)
+          file = element.feature.file
+          index = get_index_from_line_number(element.gherkin_statement.line)
+          
+          puts "#{klass} \"#{element.name}\": <#{status}>"
+          
+          send_message('result', {
+            :project_id => @project_id,
+            :feature_file => file,
+            :index => index,
+            :status => status
+          })
+          
+        end
       end
+      
+      # after_steps(Cucumber::Ast::StepCollection)
       
       
       
@@ -42,8 +62,32 @@ module Tsatsiki
       
       
       
+      def is_background?(element)
+        element === ::Cucumber::Ast::Background
+      end
+      
+      
+      
+      def map_line_numbers_to_indexes(feature)
+        whole_feature = ::Cucumber::FeatureFile.new(feature.file, nil).parse([], {})
+        @indexes_by_line = {}
+        index = 0
+        whole_feature.init
+        whole_feature.instance_variable_get(:@feature_elements).each do |element|
+          unless is_background?(element)
+            @indexes_by_line[element.gherkin_statement.line] = (index += 1)
+          end
+        end
+        @indexes_by_line
+      end
+      
+      def get_index_from_line_number(line)
+        @indexes_by_line[line]
+      end
+      
+      
+      
       def send_message(message, data={})
-        p data
         send_data({
           :message => message,
           :data => data
@@ -56,20 +100,31 @@ module Tsatsiki
       
       
       
-      def format_scenarios(results)
-        results['elements'].map do |element|
-          {
-            :line => element['line'],
-            :status => get_status_of_steps(element['steps'])
-          }
+      def get_status(element)
+        return :undefined if element.try(:raw_steps).empty? # [Cucumber::Ast::Step]
+        
+        case element
+        when ::Cucumber::Ast::Scenario:           get_status_of_scenario(element)
+        when ::Cucumber::Ast::ScenarioOutline:    get_status_of_scenario_outline(element)
+        else
+          raise("unexpected feature element: #{element.class.name}")
         end
       end
       
-      def get_status_of_steps(steps)
-        statuses = steps.map {|step| step['result']['status']}
-        status = nil
-        begin; status = statuses.shift; end while(status == "passed")
-        status || "passed"
+      def get_status_of_scenario(element)
+        element.status
+      end
+      
+      def get_status_of_scenario_outline(element)
+        status = :passed
+        any_examples = false
+        
+        element.each_example_row do |row| # Cucumber::Ast::OutlineTable::ExampleRow
+          any_examples = true
+          return row.status unless (row.status == :passed)
+        end
+        
+        return any_examples ? :passed : :undefined
       end
       
       
